@@ -113,16 +113,29 @@ def get_user_list(user_token):
     user_list = {}
 
     # Fetch the user list from the API
-    url = HIPCHAT_API_URL + "/user"
-    r = requests.get(url, headers=headers)
-    TOTAL_REQUESTS += 1
+    url = HIPCHAT_API_URL + "/user?max-results=1000"
 
-    if 'error' in r.json():
-        raise ApiError(r.json().get('error'))
+    MORE_RECORDS = True
+    while MORE_RECORDS:
 
-    # Iterate through the users and make a dict to return
-    for person in r.json()['items']:
-        user_list[str(person['id'])] = person['name']
+        # Check the REQ count...
+        check_requests_vs_limit()
+
+        r = requests.get(url, headers=headers)
+        TOTAL_REQUESTS += 1
+
+        if 'error' in r.json():
+            raise ApiError(r.json().get('error'))
+
+        # Iterate through the users and make a dict to return
+        for person in r.json()['items']:
+            user_list[str(person['id'])] = person['name']
+
+        # check for more records to process
+        if 'next' in r.json()['links']:
+            url = r.json()['links']['next']
+        else:
+            MORE_RECORDS = False
 
     # Return the dict
     return user_list
@@ -165,7 +178,7 @@ def message_export(user_token, user_id, user_name):
 
     # Set initial URL with correct user_id
     global HIPCHAT_API_URL
-    url = HIPCHAT_API_URL + "/user/%s/history?date=%s&reverse=false" % (user_id, int(time()))
+    url = HIPCHAT_API_URL + "/user/%s/history?date=%s&reverse=false&max-results=1000" % (user_id, int(time()))
 
     # main loop to fetch and save messages
     while MORE_RECORDS:
@@ -315,7 +328,7 @@ def main(argv=None):
             sys.exit(0)
 
         # Iterate through user list and export all 1-to-1 messages to disk
-        if USER_SUBSET is not None:
+        if USER_SUBSET is not None and len(USER_SUBSET) != 0:
             extract = USER_SUBSET.items()
         else:
             extract = USER_LIST.items()
